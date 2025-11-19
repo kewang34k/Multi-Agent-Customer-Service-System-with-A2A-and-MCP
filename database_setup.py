@@ -1,407 +1,174 @@
+"""
+Database Setup Script for Multi-Agent Customer Service System
+Creates SQLite database with customers and tickets tables
+Inserts test data for demonstrations
+"""
+
 import sqlite3
 from datetime import datetime
-from pathlib import Path
+import os
 
+def create_database(db_path="customer_service.db"):
+    """
+    Create database with customers and tickets tables
+    """
+    # Remove existing database if present
+    if os.path.exists(db_path):
+        os.remove(db_path)
+        print(f"✓ Removed existing database: {db_path}")
 
-class DatabaseSetup:
-    """SQLite database setup for customer support system."""
+    # Create connection
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
 
-    def __init__(self, db_path: str = "support.db"):
-        """Initialize database connection.
+    # Create customers table
+    cursor.execute("""
+        CREATE TABLE customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT,
+            phone TEXT,
+            status TEXT DEFAULT 'active' CHECK(status IN ('active', 'disabled')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    print("✓ Created customers table")
 
-        Args:
-            db_path: Path to the SQLite database file
-        """
-        self.db_path = db_path
-        self.conn = None
-        self.cursor = None
+    # Create tickets table
+    cursor.execute("""
+        CREATE TABLE tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id INTEGER NOT NULL,
+            issue TEXT NOT NULL,
+            status TEXT DEFAULT 'open' CHECK(status IN ('open', 'in_progress', 'resolved')),
+            priority TEXT DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high')),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (customer_id) REFERENCES customers(id)
+        )
+    """)
+    print("✓ Created tickets table")
 
-    def connect(self):
-        """Establish database connection."""
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.execute("PRAGMA foreign_keys = ON")  # Enable foreign key constraints
-        self.cursor = self.conn.cursor()
-        print(f"Connected to database: {self.db_path}")
+    # Insert test customers
+    test_customers = [
+        ("Alice Johnson", "alice.johnson@email.com", "+1-555-0101", "active"),
+        ("Bob Martinez", "bob.martinez@company.com", "+1-555-0202", "active"),
+        ("Carol White", "carol.white@mail.com", "+1-555-0303", "active"),
+        ("David Brown", "david.b@enterprise.com", "+1-555-0404", "active"),
+        ("Emma Davis", "emma.davis@startup.io", "+1-555-0505", "active"),
+        ("Frank Wilson", "frank.w@inactive.com", "+1-555-0606", "disabled"),
+        ("Grace Lee", "grace.lee@premium.com", "+1-555-0707", "active"),
+        ("Henry Chen", "henry.chen@tech.com", "+1-555-0808", "active"),
+        ("Iris Rodriguez", "iris.r@finance.com", "+1-555-0909", "active"),
+        ("Jack Taylor", "jack.taylor@small.biz", "+1-555-1010", "active")
+    ]
 
-    def create_tables(self):
-        """Create customers and tickets tables."""
+    cursor.executemany(
+        "INSERT INTO customers (name, email, phone, status) VALUES (?, ?, ?, ?)",
+        test_customers
+    )
+    print(f"✓ Inserted {len(test_customers)} test customers")
 
-        # Create customers table
-        self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS customers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                email TEXT,
-                phone TEXT,
-                status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'disabled')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+    # Insert test tickets
+    test_tickets = [
+        # Customer 1 (Alice) - Premium customer with multiple tickets
+        (1, "Product not working as expected", "open", "high"),
+        (1, "Need help with account settings", "in_progress", "medium"),
+        (1, "Billing question about last invoice", "resolved", "low"),
 
-        # Create tickets table
-        self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tickets (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                customer_id INTEGER NOT NULL,
-                issue TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'in_progress', 'resolved')),
-                priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high')),
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
-            )
-        """)
+        # Customer 2 (Bob) - Enterprise customer
+        (2, "System integration issues", "open", "high"),
+        (2, "API rate limit concerns", "in_progress", "high"),
 
-        # Create indexes for better query performance
-        self.cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email)
-        """)
+        # Customer 3 (Carol) - Basic customer
+        (3, "How do I reset my password?", "resolved", "low"),
 
-        self.cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_tickets_customer_id ON tickets(customer_id)
-        """)
+        # Customer 4 (David) - Multiple open tickets
+        (4, "Data export not working", "open", "high"),
+        (4, "Feature request: bulk operations", "open", "medium"),
+        (4, "Documentation unclear", "in_progress", "low"),
 
-        self.cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status)
-        """)
+        # Customer 5 (Emma) - Recent user
+        (5, "Getting started questions", "resolved", "low"),
 
-        self.conn.commit()
-        print("Tables created successfully!")
+        # Customer 7 (Grace) - Premium with urgent issue
+        (7, "Critical: Service outage affecting business", "open", "high"),
+        (7, "Need compensation for downtime", "open", "high"),
 
-    def create_triggers(self):
-        """Create triggers for automatic timestamp updates."""
+        # Customer 8 (Henry) - Technical issues
+        (8, "Performance degradation", "in_progress", "medium"),
 
-        # Trigger to update updated_at on customers table
-        self.cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS update_customer_timestamp
-            AFTER UPDATE ON customers
-            FOR EACH ROW
-            BEGIN
-                UPDATE customers SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-            END
-        """)
+        # Customer 9 (Iris) - Billing concerns
+        (9, "Double charged on subscription", "open", "high"),
+        (9, "Need refund urgently", "open", "high"),
 
-        self.conn.commit()
-        print("Triggers created successfully!")
+        # Customer 10 (Jack) - General support
+        (10, "Product inquiry", "resolved", "low")
+    ]
 
-    def insert_sample_data(self):
-        """Insert sample data for testing."""
+    cursor.executemany(
+        "INSERT INTO tickets (customer_id, issue, status, priority) VALUES (?, ?, ?, ?)",
+        test_tickets
+    )
+    print(f"✓ Inserted {len(test_tickets)} test tickets")
 
-        # Sample customers (15 customers with diverse data)
-        customers = [
-            ("John Doe", "john.doe@example.com", "+1-555-0101", "active"),
-            ("Jane Smith", "jane.smith@example.com", "+1-555-0102", "active"),
-            ("Bob Johnson", "bob.johnson@example.com", "+1-555-0103", "disabled"),
-            ("Alice Williams", "alice.w@techcorp.com", "+1-555-0104", "active"),
-            ("Charlie Brown", "charlie.brown@email.com", "+1-555-0105", "active"),
-            ("Diana Prince", "diana.prince@company.org", "+1-555-0106", "active"),
-            ("Edward Norton", "e.norton@business.net", "+1-555-0107", "active"),
-            ("Fiona Green", "fiona.green@startup.io", "+1-555-0108", "disabled"),
-            ("George Miller", "george.m@enterprise.com", "+1-555-0109", "active"),
-            ("Hannah Lee", "hannah.lee@global.com", "+1-555-0110", "active"),
-            ("Isaac Newton", "isaac.n@science.edu", "+1-555-0111", "active"),
-            ("Julia Roberts", "julia.r@movies.com", "+1-555-0112", "active"),
-            ("Kevin Chen", "kevin.chen@tech.io", "+1-555-0113", "disabled"),
-            ("Laura Martinez", "laura.m@solutions.com", "+1-555-0114", "active"),
-            ("Michael Scott", "michael.scott@paper.com", "+1-555-0115", "active"),
-        ]
+    # Commit and close
+    conn.commit()
+    conn.close()
 
-        self.cursor.executemany("""
-            INSERT INTO customers (name, email, phone, status)
-            VALUES (?, ?, ?, ?)
-        """, customers)
+    print(f"\n✓ Database created successfully: {db_path}")
+    print_database_stats(db_path)
 
-        # Sample tickets (25 tickets with various statuses and priorities)
-        tickets = [
-            # High priority tickets
-            (1, "Cannot login to account", "open", "high"),
-            (4, "Database connection timeout errors", "in_progress", "high"),
-            (7, "Payment processing failing for all transactions", "open", "high"),
-            (10, "Critical security vulnerability found", "in_progress", "high"),
-            (14, "Website completely down", "resolved", "high"),
+    return db_path
 
-            # Medium priority tickets
-            (1, "Password reset not working", "in_progress", "medium"),
-            (2, "Profile image upload fails", "resolved", "medium"),
-            (5, "Email notifications not being received", "open", "medium"),
-            (6, "Dashboard loading very slowly", "in_progress", "medium"),
-            (9, "Export to CSV feature broken", "open", "medium"),
-            (11, "Mobile app crashes on startup", "resolved", "medium"),
-            (12, "Search functionality returning wrong results", "in_progress", "medium"),
-            (15, "API rate limiting too restrictive", "open", "medium"),
+def print_database_stats(db_path="customer_service.db"):
+    """
+    Print database statistics
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
 
-            # Low priority tickets
-            (2, "Billing question about invoice", "resolved", "low"),
-            (2, "Feature request: dark mode", "open", "low"),
-            (3, "Documentation outdated for API v2", "open", "low"),
-            (5, "Typo in welcome email", "resolved", "low"),
-            (6, "Request for additional language support", "open", "low"),
-            (9, "Font size too small on settings page", "resolved", "low"),
-            (11, "Feature request: export to PDF", "open", "low"),
-            (12, "Color scheme suggestion for better contrast", "open", "low"),
-            (14, "Request access to beta features", "in_progress", "low"),
-            (15, "Question about pricing plans", "resolved", "low"),
-            (4, "Feature request: integration with Slack", "open", "low"),
-            (10, "Suggestion: add keyboard shortcuts", "open", "low"),
-        ]
+    # Count customers by status
+    cursor.execute("SELECT status, COUNT(*) FROM customers GROUP BY status")
+    customer_stats = cursor.fetchall()
 
-        self.cursor.executemany("""
-            INSERT INTO tickets (customer_id, issue, status, priority)
-            VALUES (?, ?, ?, ?)
-        """, tickets)
+    # Count tickets by status
+    cursor.execute("SELECT status, COUNT(*) FROM tickets GROUP BY status")
+    ticket_stats = cursor.fetchall()
 
-        self.conn.commit()
-        print("Sample data inserted successfully!")
-        print(f"  - {len(customers)} customers added")
-        print(f"  - {len(tickets)} tickets added")
+    # Count tickets by priority
+    cursor.execute("SELECT priority, COUNT(*) FROM tickets GROUP BY priority")
+    priority_stats = cursor.fetchall()
 
-    def display_schema(self):
-        """Display the database schema."""
+    print("\n" + "="*60)
+    print("DATABASE STATISTICS")
+    print("="*60)
 
-        print("\n" + "="*60)
-        print("DATABASE SCHEMA")
-        print("="*60)
+    print("\nCustomers by Status:")
+    for status, count in customer_stats:
+        print(f"  {status}: {count}")
 
-        # Get customers table schema
-        self.cursor.execute("PRAGMA table_info(customers)")
-        print("\nCUSTOMERS TABLE:")
-        print("-" * 60)
-        for row in self.cursor.fetchall():
-            print(f"  {row[1]:<15} {row[2]:<10} {'NOT NULL' if row[3] else ''} {f'DEFAULT {row[4]}' if row[4] else ''}")
+    print("\nTickets by Status:")
+    for status, count in ticket_stats:
+        print(f"  {status}: {count}")
 
-        # Get tickets table schema
-        self.cursor.execute("PRAGMA table_info(tickets)")
-        print("\nTICKETS TABLE:")
-        print("-" * 60)
-        for row in self.cursor.fetchall():
-            print(f"  {row[1]:<15} {row[2]:<10} {'NOT NULL' if row[3] else ''} {f'DEFAULT {row[4]}' if row[4] else ''}")
+    print("\nTickets by Priority:")
+    for priority, count in priority_stats:
+        print(f"  {priority}: {count}")
 
-        # Get foreign keys
-        self.cursor.execute("PRAGMA foreign_key_list(tickets)")
-        print("\nFOREIGN KEYS:")
-        print("-" * 60)
-        for row in self.cursor.fetchall():
-            print(f"  tickets.{row[3]} -> {row[2]}.{row[4]}")
+    conn.close()
 
-        print("="*60 + "\n")
-
-    def run_sample_queries(self):
-        """Execute sample queries to demonstrate database functionality."""
-
-        print("\n" + "="*60)
-        print("SAMPLE QUERIES")
-        print("="*60)
-
-        # Query 1: Get all open tickets
-        print("\n1. All Open Tickets:")
-        print("-" * 60)
-        self.cursor.execute("""
-            SELECT t.id, c.name, t.issue, t.priority, t.created_at
-            FROM tickets t
-            JOIN customers c ON t.customer_id = c.id
-            WHERE t.status = 'open'
-            ORDER BY
-                CASE t.priority
-                    WHEN 'high' THEN 1
-                    WHEN 'medium' THEN 2
-                    WHEN 'low' THEN 3
-                END, t.created_at
-        """)
-        for row in self.cursor.fetchall():
-            print(f"  Ticket #{row[0]} | {row[1]:<20} | {row[3].upper():<6} | {row[2]}")
-
-        # Query 2: Get all high priority tickets
-        print("\n2. High Priority Tickets (Any Status):")
-        print("-" * 60)
-        self.cursor.execute("""
-            SELECT t.id, c.name, t.issue, t.status, t.created_at
-            FROM tickets t
-            JOIN customers c ON t.customer_id = c.id
-            WHERE t.priority = 'high'
-            ORDER BY t.created_at DESC
-        """)
-        for row in self.cursor.fetchall():
-            print(f"  Ticket #{row[0]} | {row[1]:<20} | {row[3]:<11} | {row[2]}")
-
-        # Query 3: Customer with most tickets
-        print("\n3. Customers with Most Tickets:")
-        print("-" * 60)
-        self.cursor.execute("""
-            SELECT c.id, c.name, c.email, COUNT(t.id) as ticket_count
-            FROM customers c
-            LEFT JOIN tickets t ON c.id = t.customer_id
-            GROUP BY c.id, c.name, c.email
-            ORDER BY ticket_count DESC
-            LIMIT 5
-        """)
-        for row in self.cursor.fetchall():
-            print(f"  {row[1]:<25} | {row[2]:<30} | {row[3]} tickets")
-
-        # Query 4: Tickets by status count
-        print("\n4. Ticket Statistics by Status:")
-        print("-" * 60)
-        self.cursor.execute("""
-            SELECT status, COUNT(*) as count
-            FROM tickets
-            GROUP BY status
-            ORDER BY count DESC
-        """)
-        for row in self.cursor.fetchall():
-            print(f"  {row[0]:<15} | {row[1]} tickets")
-
-        # Query 5: Tickets by priority count
-        print("\n5. Ticket Statistics by Priority:")
-        print("-" * 60)
-        self.cursor.execute("""
-            SELECT priority, COUNT(*) as count
-            FROM tickets
-            GROUP BY priority
-            ORDER BY
-                CASE priority
-                    WHEN 'high' THEN 1
-                    WHEN 'medium' THEN 2
-                    WHEN 'low' THEN 3
-                END
-        """)
-        for row in self.cursor.fetchall():
-            print(f"  {row[0]:<15} | {row[1]} tickets")
-
-        # Query 6: Active customers with open tickets
-        print("\n6. Active Customers with Open Tickets:")
-        print("-" * 60)
-        self.cursor.execute("""
-            SELECT DISTINCT c.id, c.name, c.email, c.phone
-            FROM customers c
-            JOIN tickets t ON c.id = t.customer_id
-            WHERE c.status = 'active' AND t.status = 'open'
-            ORDER BY c.name
-        """)
-        for row in self.cursor.fetchall():
-            print(f"  {row[1]:<25} | {row[2]:<30} | {row[3]}")
-
-        # Query 7: Disabled customers
-        print("\n7. Disabled Customers:")
-        print("-" * 60)
-        self.cursor.execute("""
-            SELECT id, name, email, phone
-            FROM customers
-            WHERE status = 'disabled'
-            ORDER BY name
-        """)
-        for row in self.cursor.fetchall():
-            print(f"  {row[1]:<25} | {row[2]:<30} | {row[3]}")
-
-        # Query 8: Recent tickets (last 10)
-        print("\n8. Most Recent Tickets:")
-        print("-" * 60)
-        self.cursor.execute("""
-            SELECT t.id, c.name, t.issue, t.status, t.priority, t.created_at
-            FROM tickets t
-            JOIN customers c ON t.customer_id = c.id
-            ORDER BY t.created_at DESC
-            LIMIT 10
-        """)
-        for row in self.cursor.fetchall():
-            print(f"  Ticket #{row[0]} | {row[1]:<20} | {row[3]:<11} | {row[4]:<6} | {row[2][:40]}")
-
-        # Query 9: Customers without tickets
-        print("\n9. Customers Without Any Tickets:")
-        print("-" * 60)
-        self.cursor.execute("""
-            SELECT c.id, c.name, c.email, c.status
-            FROM customers c
-            LEFT JOIN tickets t ON c.id = t.customer_id
-            WHERE t.id IS NULL
-            ORDER BY c.name
-        """)
-        customers_without_tickets = self.cursor.fetchall()
-        if customers_without_tickets:
-            for row in customers_without_tickets:
-                print(f"  {row[1]:<25} | {row[2]:<30} | {row[3]}")
-        else:
-            print("  (All customers have at least one ticket)")
-
-        # Query 10: In-progress tickets with customer details
-        print("\n10. In-Progress Tickets with Customer Details:")
-        print("-" * 60)
-        self.cursor.execute("""
-            SELECT t.id, c.name, c.email, c.phone, t.issue, t.priority
-            FROM tickets t
-            JOIN customers c ON t.customer_id = c.id
-            WHERE t.status = 'in_progress'
-            ORDER BY
-                CASE t.priority
-                    WHEN 'high' THEN 1
-                    WHEN 'medium' THEN 2
-                    WHEN 'low' THEN 3
-                END
-        """)
-        for row in self.cursor.fetchall():
-            print(f"  Ticket #{row[0]} | {row[1]:<20} | {row[5].upper():<6}")
-            print(f"    Email: {row[2]} | Phone: {row[3]}")
-            print(f"    Issue: {row[4]}")
-            print()
-
-        print("="*60 + "\n")
-
-    def close(self):
-        """Close database connection."""
-        if self.conn:
-            self.conn.close()
-            print("Database connection closed.")
-
-
-def main():
-    """Main function to setup the database."""
-
-    # Initialize database
-    db = DatabaseSetup("support.db")
-
-    try:
-        # Connect to database
-        db.connect()
-
-        # Create tables
-        db.create_tables()
-
-        # Create triggers
-        db.create_triggers()
-
-        # Display schema
-        db.display_schema()
-
-        # Ask user if they want sample data
-        response = input("Would you like to insert sample data? (y/n): ").lower()
-        if response == 'y':
-            db.insert_sample_data()
-
-            # Ask user if they want to run sample queries
-            query_response = input("\nWould you like to run sample queries? (y/n): ").lower()
-            if query_response == 'y':
-                db.run_sample_queries()
-            else:
-                # Display sample data
-                print("\nSample Customers:")
-                db.cursor.execute("SELECT * FROM customers LIMIT 5")
-                for row in db.cursor.fetchall():
-                    print(f"  {row}")
-                print(f"  ... ({db.cursor.execute('SELECT COUNT(*) FROM customers').fetchone()[0]} total)")
-
-                print("\nSample Tickets:")
-                db.cursor.execute("SELECT * FROM tickets LIMIT 5")
-                for row in db.cursor.fetchall():
-                    print(f"  {row}")
-                print(f"  ... ({db.cursor.execute('SELECT COUNT(*) FROM tickets').fetchone()[0]} total)")
-
-        print("\n✓ Database setup complete!")
-
-    except sqlite3.Error as e:
-        print(f"Database error: {e}")
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        db.close()
-
+def reset_database(db_path="customer_service.db"):
+    """
+    Reset database to initial state
+    """
+    print("\n🔄 Resetting database...")
+    return create_database(db_path)
 
 if __name__ == "__main__":
-    main()
+    # Create database with test data
+    db_path = create_database()
+
+    print("\n" + "="*60)
+    print("Setup complete! Database ready for MCP server.")
+    print("="*60)
