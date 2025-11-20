@@ -77,6 +77,8 @@ This will create `customer_service.db` with test data.
 
 ### Option 1: Jupyter Notebook (Recommended)
 
+The notebook provides a complete walkthrough with detailed explanations and outputs.
+
 1. Start Jupyter:
 ```bash
 jupyter notebook
@@ -84,9 +86,22 @@ jupyter notebook
 
 2. Open `Multi_Agent_Customer_Service_Complete.ipynb`
 
-3. Run all cells sequentially
+3. Run all cells sequentially to see:
+   - **Part 1-2**: Setup and database initialization
+   - **Part 3**: MCP Server with 5 tools
+   - **Part 4-5**: Agent implementations (Router, Data, Support)
+   - **Part 6**: LangGraph workflow compilation
+   - **Part 7**: Three coordination scenarios with A2A logs
+   - **Part 8**: Five required test scenarios
+   - **Part 9**: System statistics and analysis
+   - **Conclusion**: Learning outcomes and challenges
+   - **Improvement**: Router agent refinement and verification tests
 
-4. Explore the 3 coordination scenarios and 5 test cases
+4. Each scenario shows:
+   - Agent execution flow
+   - MCP tool calls
+   - A2A communication logs
+   - Final responses
 
 ### Option 2: Python Scripts
 
@@ -155,26 +170,73 @@ The notebook includes 5 comprehensive test scenarios:
 
 ## 🔄 A2A Coordination Patterns
 
-### Pattern 1: Task Allocation
+### Pattern 1: Task Allocation (Simple Routing)
 Router analyzes query and delegates to single specialist agent.
 
+**Flow:**
 ```
-Router → [Analyze Intent] → Data Agent → Response
-```
-
-### Pattern 2: Negotiation/Escalation
-Multiple agents coordinate when query has multiple intents.
-
-```
-Router → [Detect Multi-Intent] → Data Agent → Support Agent → Synthesize
+Router → [Analyze Intent] → Data Agent → Synthesize → Response
 ```
 
-### Pattern 3: Multi-Step Coordination
-Complex queries decomposed into sub-tasks.
+**Example Query:** "Get customer information for ID 5"
 
+**A2A Communication Log:**
 ```
-Router → [Decompose] → Data (Step 1) → Data (Step 2) → Synthesize Report
+[ROUTER] Analyzed query - Intent: account_info
+[ROUTER → DATA] Requesting customer data
+[DATA] Calling MCP: get_customer_history(5)
+[DATA → ROUTER] Retrieved customer context
+[ROUTER] Finalized response
 ```
+
+**Use Case**: Simple data retrieval queries where one agent can handle the entire request.
+
+### Pattern 2: Negotiation/Coordination (Multi-Agent)
+Multiple agents coordinate when query requires both data context and support expertise.
+
+**Flow:**
+```
+Router → Data Agent → [Share Context] → Support Agent → Synthesize → Response
+```
+
+**Example Query:** "I'm customer 1 and need help upgrading my account"
+
+**A2A Communication Log:**
+```
+[ROUTER] Analyzed query - Intent: account_info
+[ROUTER → DATA] Requesting customer data
+[ROUTER → SUPPORT] Routing to support agent
+[DATA] Calling MCP: get_customer_history(1)
+[DATA → SUPPORT] Providing customer context for Alice Johnson
+[SUPPORT] Using customer context from Data Agent
+[SUPPORT → ROUTER] Generated response
+[ROUTER] Finalized response
+```
+
+**Use Case**: Queries needing customer context + personalized support (account help, billing questions, technical issues).
+
+### Pattern 3: Multi-Step Coordination (Complex Decomposition)
+Complex queries decomposed into sequential sub-tasks with intermediate processing.
+
+**Flow:**
+```
+Router → [Decompose] → Data (Step 1) → Data (Step 2) → ... → Synthesize Report
+```
+
+**Example Query:** "Show me all active customers who have open tickets"
+
+**A2A Communication Log:**
+```
+[ROUTER] Decomposing complex query into sub-tasks
+[ROUTER → DATA] Step 1: Get all active customers
+[DATA → ROUTER] Found 5 active customers
+[ROUTER → DATA] Step 2: Check tickets for each customer
+[DATA → ROUTER] Found 4 customers with open tickets
+[ROUTER] Step 3: Formatting report
+[ROUTER] Multi-step coordination complete
+```
+
+**Use Case**: Complex analytical queries requiring multiple database operations and data aggregation.
 
 ## 📊 MCP Server Tools
 
@@ -230,16 +292,61 @@ Every agent interaction is logged for transparency:
 [ROUTER] Finalized response
 ```
 
-## 🎓 Learning Outcomes
+## 🎓 Key Learnings & Implementation Insights
 
-This implementation demonstrates:
+### What This Implementation Teaches
 
-1. **LangGraph Workflow**: StateGraph with conditional routing
-2. **Agent Coordination**: Explicit A2A communication patterns
-3. **MCP Protocol**: Standardized database access
-4. **State Management**: Shared state across multiple agents
-5. **Intent Classification**: Router-based query analysis
-6. **Context Awareness**: Agents using information from other agents
+1. **State Management is Critical**: Using LangGraph's StateGraph pattern allows agents to share context seamlessly while maintaining clean separation of concerns. The shared state enables complex workflows without tight coupling between agents.
+
+2. **A2A Coordination Requires Explicit Logging**: Agent-to-Agent communication isn't just about passing data—it's about understanding how agents collaborate. The A2A logging system (`a2a_log`) tracks every handoff and decision, making the system transparent and debuggable.
+
+3. **Router as Orchestrator**: The Router Agent makes critical decisions about which specialist agents to invoke and in what order. It analyzes intent, determines data requirements, and coordinates the workflow—acting as the "conductor" of the multi-agent orchestra.
+
+4. **MCP Provides Clean Abstraction**: The Model Context Protocol creates a standardized interface for database access, allowing the Customer Data Agent to interact with data through well-defined tools without coupling to specific database implementations.
+
+5. **Agent Negotiation for Complex Queries**: Multi-intent queries (like "cancel subscription with billing issues") require agents to coordinate and determine the best approach. This negotiation pattern is essential for real-world customer service scenarios.
+
+### Technical Capabilities Demonstrated
+
+- **LangGraph Workflow**: StateGraph with conditional routing and state persistence
+- **Agent Coordination**: Three distinct A2A communication patterns
+- **MCP Protocol**: 5 standardized tools for database operations
+- **Intent Classification**: LLM-powered query analysis with fallback logic
+- **Context Awareness**: Agents building on information from previous agents
+- **Error Handling**: Robust JSON parsing with regex-based fallbacks
+
+## 🚧 Challenges & Solutions
+
+### Challenge 1: A2A Coordination Logging
+**Problem**: Tracking agent-to-agent communications while maintaining clean workflow logic felt like adding unnecessary complexity.
+
+**Solution**: Realized that A2A logging is essential for debugging and understanding system behavior. Implemented a simple list-based log (`a2a_log`) that gets passed through the state and appended by each agent. This provides complete visibility into the coordination flow.
+
+### Challenge 2: Multi-Intent Query Handling
+**Problem**: Queries like "cancel subscription with billing issues" require both billing context (Data Agent) and support guidance (Support Agent) with proper coordination.
+
+**Solution**: Enhanced the Router Agent to detect multiple intents and determine if agents should run sequentially or in parallel. The router uses LLM-based analysis with fallback logic to ensure robust intent classification.
+
+### Challenge 3: Conditional Routing in LangGraph
+**Problem**: Determining when to route `Router → Data → Support` versus `Router → Support` based on whether customer context is needed.
+
+**Solution**: Implemented conditional edges with explicit routing functions (`route_after_router`, `route_after_data`) that check state flags (`requires_data`, `requires_support`) to determine the next agent in the workflow.
+
+### Challenge 4: Router Agent Reliability
+**Problem**: Initial router implementation sometimes failed to request customer data even when a Customer ID was present in the query, leading to missed context.
+
+**Solution**: Refined the router agent with:
+- **Stricter system prompt** explicitly requiring data access when ID is present
+- **Regex-based fallback** to extract Customer IDs if LLM parsing fails
+- **Deterministic override** forcing `requires_data=true` when any Customer ID is detected
+- **Robust JSON parsing** with cleanup logic to handle malformed LLM responses
+
+### Challenge 5: Multi-Step Coordination
+**Problem**: Complex queries like "find all active customers with open tickets" require breaking down into atomic MCP operations and synthesizing results.
+
+**Solution**: Demonstrated decomposition pattern where the Router breaks complex queries into sub-tasks (Step 1: list customers, Step 2: check tickets for each, Step 3: format report), highlighting the importance of composable tools and clear agent responsibilities.
+
+**Key Takeaway**: Multi-agent systems excel with complex queries, but require careful orchestration, explicit communication logging, and well-defined interfaces (like MCP) to maintain clarity and debuggability.
 
 ## 🐛 Troubleshooting
 
